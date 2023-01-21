@@ -3,20 +3,22 @@ package main
 import "net"
 
 type User struct {
-	Name string
-	Addr string
-	C    chan string
-	conn net.Conn
+	Name   string
+	Addr   string
+	C      chan string
+	conn   net.Conn
+	server *Server
 }
 
-func NewUser(conn net.Conn) *User {
+func NewUser(conn net.Conn, server *Server) *User {
 	userAddr := conn.RemoteAddr().String()
 
 	user := &User{
-		Name: userAddr,
-		Addr: userAddr,
-		C:    make(chan string),
-		conn: conn,
+		Name:   userAddr,
+		Addr:   userAddr,
+		C:      make(chan string),
+		conn:   conn,
+		server: server,
 	}
 
 	go user.ListenMessage()
@@ -30,4 +32,22 @@ func (user *User) ListenMessage() {
 
 		user.conn.Write([]byte(msg + "\n"))
 	}
+}
+
+func (user *User) Online() {
+	user.server.mapLock.Lock()
+	user.server.OnlineMap[user.Name] = user
+	user.server.mapLock.Unlock()
+	user.server.BroadCast(user, "is online")
+}
+
+func (user *User) Offline() {
+	user.server.mapLock.Lock()
+	delete(user.server.OnlineMap, user.Name)
+	user.server.mapLock.Unlock()
+	user.server.BroadCast(user, "is downline")
+}
+
+func (user *User) DoMessage(msg string) {
+	user.server.BroadCast(user, msg)
 }
