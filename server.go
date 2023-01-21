@@ -3,23 +3,53 @@ package main
 import (
 	"fmt"
 	"net"
+	"sync"
 )
 
 type Server struct {
-	Ip   string
-	Port int
+	Ip        string
+	Port      int
+	OnlineMap map[string]*User
+	mapLock   sync.RWMutex
+	Message   chan string
 }
 
 func NewServer(ip string, port int) *Server {
 	server := &Server{
-		Ip:   ip,
-		Port: port,
+		Ip:        ip,
+		Port:      port,
+		OnlineMap: make(map[string]*User),
+		Message:   make(chan string),
 	}
 	return server
 }
 
+func (server *Server) BroadCast(user *User, msg string) {
+	sendMsg := "[" + user.Addr + "]" + user.Name + ":" + msg
+	server.Message <- sendMsg
+}
+
+func (server *Server) ListenMessager() {
+	for {
+		msg := <-server.Message
+
+		server.mapLock.Lock()
+		for _, cli := range server.OnlineMap {
+			cli.C <- msg
+		}
+		server.mapLock.Unlock()
+	}
+}
+
 func (server *Server) Handler(conn net.Conn) {
-	fmt.Println("链接建立成功")
+	user := NewUser(conn)
+
+	server.mapLock.Lock()
+	server.OnlineMap[user.Name] = user
+	server.mapLock.Unlock()
+
+	server.BroadCast(user, "is online")
+	select {}
 }
 
 func (server *Server) start() {
@@ -28,8 +58,9 @@ func (server *Server) start() {
 		fmt.Println("net.Listen err:", err)
 		return
 	}
+	fmt.Println("服务器已启动")
 	defer listener.Close()
-
+	go server.ListenMessager()
 	for {
 		conn, err := listener.Accept()
 		if err != nil {
