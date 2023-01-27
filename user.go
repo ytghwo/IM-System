@@ -72,6 +72,23 @@ func (user *User) DoMessage(msg string) {
 			user.Name = newName
 			user.sendMsg("rename is ok\n")
 		}
+	} else if len(msg) > 4 && msg[:3] == "to|" {
+		remoteName := strings.Split(msg, "|")[1]
+		if remoteName == "" {
+			user.sendMsg("the format of message is incorrect\n")
+			return
+		}
+		remoteUser, ok := user.server.OnlineMap[remoteName]
+		if !ok {
+			user.sendMsg("the user is not exist\n")
+			return
+		}
+		content := strings.Split(msg, "|")[2]
+		if content == "" {
+			user.sendMsg("please resend\n")
+			return
+		}
+		remoteUser.sendMsg(user.Name + " tell you that " + content + "\n")
 	} else {
 		user.server.BroadCast(user, msg)
 	}
